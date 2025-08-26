@@ -1,67 +1,73 @@
 package net.lateinit.blockbuilder.data
 
-/**
- * 블록들을 체인 형태로 관리하는 클래스입니다.
- */
 class Blockchain {
     val chain = mutableListOf<Block>()
+    // 'Mempool' 역할을 하는, 아직 블록에 포함되지 않은 거래 목록
+    var pendingTransactions = mutableListOf<Transaction>()
+
+    // 채굴 난이도와 보상 설정
+    private val difficulty = 2 // 해시가 '00'으로 시작해야 함
+    private val miningReward = 100 // 채굴 성공 시 보상
 
     init {
-        // 블록체인이 생성될 때 첫 번째 블록인 제네시스 블록을 추가합니다.
         createGenesisBlock()
     }
 
-    /**
-     * 체인의 시작점인 제네시스 블록을 생성합니다.
-     */
     private fun createGenesisBlock() {
-        val genesisBlock = Block(0, data = "제네시스 블록", previousHash = "0")
+        val genesisBlock = Block(0, transactions = emptyList(), previousHash = "0")
+        genesisBlock.hash = genesisBlock.calculateHash()
         chain.add(genesisBlock)
     }
 
     /**
-     * 새로운 데이터를 받아 새 블록을 체인에 추가합니다.
+     * 새로운 거래를 생성하여 대기열(pendingTransactions)에 추가합니다.
      */
-    fun addBlock(data: String) {
-        val lastBlock = chain.last()
+    fun createTransaction(transaction: Transaction) {
+        pendingTransactions.add(transaction)
+    }
+
+    /**
+     * 대기 중인 모든 거래를 모아 새로운 블록을 채굴합니다.
+     * @param minerAddress 채굴 보상을 받을 사람의 지갑 주소.
+     */
+    fun minePendingTransactions(minerAddress: String) {
+        // 대기 중인 거래들을 담아 새 블록 생성
         val newBlock = Block(
-            index = lastBlock.index + 1,
-            data = data,
-            previousHash = lastBlock.hash
+            index = chain.size,
+            transactions = pendingTransactions.toList(), // 현재 대기중인 모든 거래를 포함
+            previousHash = chain.last().hash
         )
+
+        // 어려운 수학 문제 풀기 (작업증명)
+        newBlock.mineBlock(difficulty)
+
+        // 체인에 새 블록 추가
         chain.add(newBlock)
+
+        // 거래 대기열을 비우고, 채굴 보상 거래를 새로 추가
+        pendingTransactions = mutableListOf(
+            Transaction("System", minerAddress, miningReward)
+        )
     }
 
     /**
-     * 블록체인의 무결성을 검증합니다.
+     * 특정 지갑 주소의 잔액을 계산합니다.
+     * 체인의 모든 블록을 순회하며 입출금 내역을 모두 더하고 뺍니다.
+     * @param address 잔액을 조회할 지갑 주소.
+     * @return 해당 지갑의 최종 잔액.
      */
-    fun isChainValid(): Boolean {
-        for (i in 1 until chain.size) {
-            val currentBlock = chain[i]
-            val previousBlock = chain[i - 1]
-
-            // 현재 블록의 해시값이 데이터와 일치하는지 재계산하여 확인
-            if (currentBlock.hash != currentBlock.calculateHash()) {
-                return false
-            }
-            // 현재 블록이 가리키는 이전 해시값이 실제 이전 블록의 해시값과 일치하는지 확인
-            if (currentBlock.previousHash != previousBlock.hash) {
-                return false
+    fun getBalanceOfAddress(address: String): Int {
+        var balance = 0
+        for (block in chain) {
+            for (trans in block.transactions) {
+                if (trans.fromAddress == address) {
+                    balance -= trans.amount
+                }
+                if (trans.toAddress == address) {
+                    balance += trans.amount
+                }
             }
         }
-        return true
-    }
-
-    /**
-     * 특정 블록의 데이터를 임의로 변경합니다. (실험용)
-     * @param index 조작할 블록의 인덱스
-     * @param newData 새로운 데이터
-     */
-    fun tamperBlock(index: Int, newData: String) {
-        if (index > 0 && index < chain.size) { // 제네시스 블록(index 0)은 변경하지 않음
-            val originalBlock = chain[index]
-            // 데이터만 변경하고 나머지 속성은 그대로 유지하여 새 블록 객체를 생성
-            chain[index] = originalBlock.copy(data = newData)
-        }
+        return balance
     }
 }

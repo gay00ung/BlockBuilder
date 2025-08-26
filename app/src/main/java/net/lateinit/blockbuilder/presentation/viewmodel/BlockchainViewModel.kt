@@ -1,46 +1,92 @@
 package net.lateinit.blockbuilder.presentation.viewmodel
 
+import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.lifecycle.ViewModel
-import net.lateinit.blockbuilder.data.Block
+import androidx.lifecycle.viewModelScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import net.lateinit.blockbuilder.data.Blockchain
+import net.lateinit.blockbuilder.data.Transaction
+import net.lateinit.blockbuilder.data.Wallet
 
 class BlockchainViewModel : ViewModel() {
-    // 블록체인 인스턴스를 생성합니다.
     private val blockchain = Blockchain()
 
-    // Compose UI에서 관찰할 수 있는 상태들을 정의합니다.
-    val chainState = mutableStateOf<List<Block>>(emptyList())
-    val validityState = mutableStateOf(true)
+    // UI 상태
+    val wallets = mutableStateListOf<Wallet>()
+    val chainState = mutableStateOf(blockchain.chain.toList())
+    val pendingTransactionsState = mutableStateOf(blockchain.pendingTransactions.toList())
+    val miningInProgress = mutableStateOf(false)
+    val balances = mutableStateOf<Map<String, Int>>(emptyMap())
+    val errorMessage = mutableStateOf<String?>(null) // 에러 메시지 상태 추가
 
     init {
-        // ViewModel이 생성될 때 초기 상태를 UI에 반영합니다.
-        updateChainState()
+        // 앱 시작 시 기본 지갑 2개 생성
+        createWallet()
+        createWallet()
+        // 각 지갑에 초기 코인 분배
+        distributeInitialCoins()
     }
 
-    /**
-     * 새로운 데이터를 받아 블록을 추가하고 UI 상태를 갱신합니다.
-     */
-    fun addBlock(data: String) {
-        blockchain.addBlock(data)
-        updateChainState()
+    private fun distributeInitialCoins() {
+        if (wallets.isNotEmpty()) {
+            wallets.forEach { wallet ->
+                val amount = (100..500).random()
+                blockchain.createTransaction(Transaction("System", wallet.address, amount))
+            }
+            // 첫 번째 지갑을 채굴자로 하여 초기 코인 지급 거래를 채굴
+            blockchain.minePendingTransactions(wallets.first().address)
+            
+            // UI 상태 업데이트
+            chainState.value = blockchain.chain.toList()
+            pendingTransactionsState.value = blockchain.pendingTransactions.toList()
+            updateBalances()
+        }
     }
 
-    /**
-     * 특정 블록의 데이터를 조작하고 UI 상태를 갱신합니다. (실험용)
-     * @param index 조작할 블록의 인덱스
-     */
-    fun tamperBlock(index: Int) {
-        val tamperedData = "데이터 조작됨! ${System.currentTimeMillis()}"
-        blockchain.tamperBlock(index, tamperedData)
-        updateChainState() // 유효성 검사를 다시 하고 UI를 갱신
+    fun createWallet() {
+        errorMessage.value = null // 에러 메시지 초기화
+        wallets.add(Wallet())
+        updateBalances()
     }
 
-    /**
-     * 블록체인의 현재 상태(블록 리스트, 유효성)를 가져와 UI 상태 변수를 업데이트합니다.
-     */
-    private fun updateChainState() {
-        chainState.value = blockchain.chain.toList() // 불변 리스트로 변환하여 UI에 전달
-        validityState.value = blockchain.isChainValid()
+    fun createTransaction(from: String, to: String, amount: Int) {
+        errorMessage.value = null // 이전 에러 메시지 초기화
+        val fromBalance = balances.value[from] ?: 0
+        if (fromBalance >= amount) {
+            val transaction = Transaction(from, to, amount)
+            blockchain.createTransaction(transaction)
+            pendingTransactionsState.value = blockchain.pendingTransactions.toList()
+        } else {
+            // 잔액 부족 시 에러 메시지 설정
+            errorMessage.value = "잔액이 부족합니다! 먼저 채굴을 통해 보상을 받아야 합니다."
+        }
+    }
+
+    fun mineBlock() {
+        errorMessage.value = null // 에러 메시지 초기화
+        if (wallets.isNotEmpty()) {
+            viewModelScope.launch {
+                miningInProgress.value = true
+                // 채굴은 계산량이 많은 작업이므로 IO 스레드에서 수행
+                withContext(Dispatchers.IO) {
+                    blockchain.minePendingTransactions(wallets.first().address) // 첫 번째 지갑을 채굴자로 지정
+                }
+                // UI 업데이트는 메인 스레드에서 수행
+                chainState.value = blockchain.chain.toList()
+                pendingTransactionsState.value = blockchain.pendingTransactions.toList()
+                updateBalances()
+                miningInProgress.value = false
+            }
+        }
+    }
+
+    private fun updateBalances() {
+        val newBalances = wallets.associate { wallet ->
+            wallet.address to blockchain.getBalanceOfAddress(wallet.address)
+        }
+        balances.value = newBalances
     }
 }
