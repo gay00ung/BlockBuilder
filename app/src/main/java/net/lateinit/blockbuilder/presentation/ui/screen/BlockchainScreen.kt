@@ -38,6 +38,8 @@ import net.lateinit.blockbuilder.data.Block
 import net.lateinit.blockbuilder.data.Transaction
 import net.lateinit.blockbuilder.data.Wallet
 import net.lateinit.blockbuilder.presentation.viewmodel.BlockchainViewModel
+import androidx.compose.material3.Switch
+import androidx.compose.ui.Alignment
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -48,6 +50,7 @@ fun BlockBuilderScreen(viewModel: BlockchainViewModel) {
     val chain = viewModel.chainState.value
     val miningInProgress = viewModel.miningInProgress.value
     val errorMessage = viewModel.errorMessage.value // 에러 메시지 상태 가져오기
+    val isAutoMining = viewModel.isAutoMining.value
 
     Scaffold {
         LazyColumn(
@@ -91,8 +94,27 @@ fun BlockBuilderScreen(viewModel: BlockchainViewModel) {
                 Text("대기 중인 거래: ${pendingTransactions.size}개")
                 pendingTransactions.forEach { TransactionItem(it) }
                 Spacer(modifier = Modifier.height(8.dp))
-                Button(onClick = { viewModel.mineBlock() }, enabled = !miningInProgress && pendingTransactions.isNotEmpty()) {
-                    if (miningInProgress) {
+
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text("자동 채굴 (3초마다)")
+                    Spacer(modifier = Modifier.weight(1f))
+                    Switch(
+                        checked = isAutoMining,
+                        onCheckedChange = { viewModel.toggleAutoMining() },
+                        enabled = !miningInProgress || isAutoMining // 수동 채굴 중이 아닐 때만 활성화
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                Button(
+                    onClick = { viewModel.mineBlock() },
+                    enabled = !miningInProgress && pendingTransactions.isNotEmpty() && !isAutoMining
+                ) {
+                    if (miningInProgress && !isAutoMining) {
                         CircularProgressIndicator(modifier = Modifier.size(24.dp), color = Color.White)
                         Spacer(modifier = Modifier.width(8.dp))
                         Text("채굴 중...")

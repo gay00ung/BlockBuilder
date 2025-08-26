@@ -10,6 +10,8 @@ import kotlinx.coroutines.withContext
 import net.lateinit.blockbuilder.data.Blockchain
 import net.lateinit.blockbuilder.data.Transaction
 import net.lateinit.blockbuilder.data.Wallet
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 
 class BlockchainViewModel : ViewModel() {
     private val blockchain = Blockchain()
@@ -21,6 +23,8 @@ class BlockchainViewModel : ViewModel() {
     val miningInProgress = mutableStateOf(false)
     val balances = mutableStateOf<Map<String, Int>>(emptyMap())
     val errorMessage = mutableStateOf<String?>(null) // 에러 메시지 상태 추가
+    val isAutoMining = mutableStateOf(false)
+    private var autoMiningJob: Job? = null
 
     init {
         // 앱 시작 시 기본 지갑 2개 생성
@@ -38,7 +42,7 @@ class BlockchainViewModel : ViewModel() {
             }
             // 첫 번째 지갑을 채굴자로 하여 초기 코인 지급 거래를 채굴
             blockchain.minePendingTransactions(wallets.first().address)
-            
+
             // UI 상태 업데이트
             chainState.value = blockchain.chain.toList()
             pendingTransactionsState.value = blockchain.pendingTransactions.toList()
@@ -81,6 +85,32 @@ class BlockchainViewModel : ViewModel() {
                 miningInProgress.value = false
             }
         }
+    }
+
+    fun toggleAutoMining() {
+        isAutoMining.value = !isAutoMining.value
+        if (isAutoMining.value) {
+            startAutoMining()
+        } else {
+            stopAutoMining()
+        }
+    }
+
+    private fun startAutoMining() {
+        autoMiningJob = viewModelScope.launch {
+            while (isAutoMining.value) {
+                if (pendingTransactionsState.value.isNotEmpty()) {
+                    mineBlock()
+                }
+                delay(3000) // 3초 대기
+            }
+        }
+    }
+
+    private fun stopAutoMining() {
+        autoMiningJob?.cancel()
+        autoMiningJob = null
+        miningInProgress.value = false // 자동 채굴 중단 시 채굴 진행 상태 초기화
     }
 
     private fun updateBalances() {
