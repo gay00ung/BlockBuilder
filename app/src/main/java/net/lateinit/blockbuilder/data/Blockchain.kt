@@ -6,7 +6,7 @@ class Blockchain {
     var pendingTransactions = mutableListOf<Transaction>()
 
     // 채굴 난이도와 보상 설정
-    private val difficulty = 2 // 해시가 '00'으로 시작해야 함
+    var difficulty = 2 // 해시가 '00'으로 시작해야 함
     private val miningReward = 100 // 채굴 성공 시 보상
 
     init {

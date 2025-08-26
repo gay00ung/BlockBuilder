@@ -41,6 +41,9 @@ import net.lateinit.blockbuilder.presentation.viewmodel.BlockchainViewModel
 import androidx.compose.material3.Switch
 import androidx.compose.ui.Alignment
 
+import kotlinx.coroutines.launch
+import androidx.compose.runtime.rememberCoroutineScope
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun BlockBuilderScreen(viewModel: BlockchainViewModel) {
@@ -51,6 +54,8 @@ fun BlockBuilderScreen(viewModel: BlockchainViewModel) {
     val miningInProgress = viewModel.miningInProgress.value
     val errorMessage = viewModel.errorMessage.value // 에러 메시지 상태 가져오기
     val isAutoMining = viewModel.isAutoMining.value
+    val difficulty = viewModel.difficulty.value
+    val scope = rememberCoroutineScope()
 
     Scaffold {
         LazyColumn(
@@ -91,10 +96,12 @@ fun BlockBuilderScreen(viewModel: BlockchainViewModel) {
 
             item {
                 SectionTitle("⛏️ 채굴")
+                DifficultyEditor(difficulty = difficulty, onDifficultyChange = viewModel::onDifficultyChange)
+                Spacer(modifier = Modifier.height(16.dp))
                 Text("대기 중인 거래: ${pendingTransactions.size}개")
                 pendingTransactions.forEach { TransactionItem(it) }
                 Spacer(modifier = Modifier.height(8.dp))
-
+                
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     modifier = Modifier.fillMaxWidth()
@@ -111,7 +118,11 @@ fun BlockBuilderScreen(viewModel: BlockchainViewModel) {
                 Spacer(modifier = Modifier.height(8.dp))
 
                 Button(
-                    onClick = { viewModel.mineBlock() },
+                    onClick = { 
+                        scope.launch {
+                            viewModel.mineBlock()
+                        }
+                    }, 
                     enabled = !miningInProgress && pendingTransactions.isNotEmpty() && !isAutoMining
                 ) {
                     if (miningInProgress && !isAutoMining) {
@@ -133,6 +144,21 @@ fun BlockBuilderScreen(viewModel: BlockchainViewModel) {
             }
         }
     }
+}
+
+@Composable
+fun DifficultyEditor(difficulty: Int, onDifficultyChange: (String) -> Unit) {
+    var text by remember { mutableStateOf(difficulty.toString()) }
+    OutlinedTextField(
+        value = text,
+        onValueChange = { 
+            text = it
+            onDifficultyChange(it)
+        },
+        label = { Text("채굴 난이도") },
+        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+        modifier = Modifier.fillMaxWidth()
+    )
 }
 
 @Composable

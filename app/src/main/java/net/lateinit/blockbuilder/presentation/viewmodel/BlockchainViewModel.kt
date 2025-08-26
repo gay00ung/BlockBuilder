@@ -25,6 +25,7 @@ class BlockchainViewModel : ViewModel() {
     val errorMessage = mutableStateOf<String?>(null) // 에러 메시지 상태 추가
     val isAutoMining = mutableStateOf(false)
     private var autoMiningJob: Job? = null
+    val difficulty = mutableStateOf(blockchain.difficulty)
 
     init {
         // 앱 시작 시 기본 지갑 2개 생성
@@ -111,6 +112,12 @@ class BlockchainViewModel : ViewModel() {
         autoMiningJob?.cancel()
         autoMiningJob = null
         miningInProgress.value = false // 자동 채굴 중단 시 채굴 진행 상태 초기화
+    }
+
+    fun onDifficultyChange(newDifficulty: String) {
+        val difficultyValue = newDifficulty.toIntOrNull() ?: return
+        difficulty.value = difficultyValue
+        blockchain.difficulty = difficultyValue
     }
 
     private fun updateBalances() {
